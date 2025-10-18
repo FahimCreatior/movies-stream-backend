@@ -1,0 +1,4 @@
+curl -X POST https://movies-stream-backend.onrender.com/api/v1/user/SignIn \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"password123"}' \
+  | jq .
