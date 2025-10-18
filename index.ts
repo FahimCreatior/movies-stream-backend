@@ -59,6 +59,17 @@ function startServer() {
 // MIDDLEWARES
 app.use(express.json({ limit: '30mb' }));
 app.use(express.urlencoded({ limit: '30mb', extended: true }));
+
+// Basic request logging
+app.use((req, res, next) => {
+  console.log('🌐 Request received:', {
+    method: req.method,
+    url: req.url,
+    hasAuth: !!req.headers.authorization
+  });
+  next();
+});
+
 const corsOptions = {
   origin: process.env.CLIENT || 'http://localhost:5173',
   optionsSuccessStatus: 200,
