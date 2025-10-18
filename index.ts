@@ -62,7 +62,7 @@ app.use(express.urlencoded({ limit: '30mb', extended: true }));
 const corsOptions = {
   origin: process.env.CLIENT || 'http://localhost:5173',
   optionsSuccessStatus: 200,
-  // credentials: true, // Not needed for token-based auth
+  credentials: true, // Enable for token-based auth and cookies
 };
 app.use(cors(corsOptions));
 app.use(cookieParser());
