@@ -11,23 +11,42 @@ dotenv.config();
 const deserializeUserFromJWT = async (req: Request, res: Response, next: NextFunction) => {
   // Get token from Authorization header: "Bearer <token>"
   const authHeader = req.headers.authorization;
+
+  console.log('🔐 Auth Debug:', {
+    hasAuthHeader: !!authHeader,
+    authHeaderPrefix: authHeader?.substring(0, 20),
+    url: req.url,
+    method: req.method
+  });
+
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.log('❌ No Bearer token found');
     return next();
   }
 
   const accessToken = authHeader.substring(7); // Remove "Bearer " prefix
 
-  if (!accessToken) return next();
+  if (!accessToken) {
+    console.log('❌ Empty access token');
+    return next();
+  }
+
+  console.log('🔍 Verifying token:', {
+    tokenLength: accessToken.length,
+    tokenPreview: accessToken.substring(0, 20) + '...'
+  });
 
   const { decoded, expired } = verifyJWT(accessToken);
 
   if (decoded) {
+    console.log('✅ Token verified successfully for user:', (decoded as any)?.email);
     res.locals.user = decoded;
     return next();
   }
 
   // Token expired - return 401 for frontend to handle refresh
   if (expired) {
+    console.log('⏰ Token expired');
     return res.status(401).json({
       error: 'Access token expired',
       code: 'TOKEN_EXPIRED'
@@ -35,6 +54,7 @@ const deserializeUserFromJWT = async (req: Request, res: Response, next: NextFun
   }
 
   // Invalid token
+  console.log('❌ Invalid token');
   return res.status(401).json({
     error: 'Invalid access token',
     code: 'INVALID_TOKEN'
