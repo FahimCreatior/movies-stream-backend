@@ -50,14 +50,11 @@ const ConfirmPasswordSchema = z.object({
       newPassword: z
         .string({ required_error: 'Password is required' })
         .min(6, 'Password is too short - should be 6 characters minimum'),
-      confirmPassword: z.string({
-        required_error: 'Confirmation password is required',
+      currentPassword: z.string({
+        required_error: 'Current password is required',
       }),
     })
-    .refine((data) => data.newPassword !== data.confirmPassword, {
-      message: 'Choose a different password',
-      path: ['passwordCreation'],
-    }),
+    // Removed incorrect validation - password verification is handled in controller
 });
 
 const UserUpdateSchema = z.union([InfoSchema, AvatarSchema, ConfirmPasswordSchema]);

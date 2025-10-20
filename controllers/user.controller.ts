@@ -139,16 +139,98 @@ const userUpdateHandler = async (
   res: Response,
 ) => {
   try {
+    console.log('🔧 [USER UPDATE] Handler called with:', {
+      queryType: req.query.type,
+      bodyKeys: Object.keys(req.body),
+      body: req.body
+    });
+
     let user = await UserModel.findOne({ _id: res.locals.user._id });
     if (!user) return res.status(404).send('User not found.');
-    if (req.query.type === 'password') {
-      const isValid = await bcrypt.compare(
-        (req.body as ConfirmPasswordType['body']).confirmPassword,
-        user.password,
-      );
-      if (!isValid) return res.status(401).send('Wrong confirmation password.');
 
-      user.password = (req.body as ConfirmPasswordType['body']).newPassword;
+    console.log('User found:', {
+      id: user._id,
+      email: user.email,
+      hasPassword: !!user.password,
+      passwordLength: user.password?.length || 0
+    });
+
+    if (req.query.type === 'password') {
+      const currentPassword = (req.body as ConfirmPasswordType['body']).currentPassword;
+      const newPassword = (req.body as ConfirmPasswordType['body']).newPassword;
+
+      console.log('🔐 [PASSWORD UPDATE] Step 1: Request received');
+      console.log('🔐 [PASSWORD UPDATE] Request body:', {
+        hasCurrent: !!currentPassword,
+        hasNew: !!newPassword,
+        currentLength: currentPassword?.length || 0,
+        newLength: newPassword?.length || 0,
+        currentPasswordValue: currentPassword,
+        newPasswordValue: newPassword
+      });
+
+      console.log('🔐 [PASSWORD UPDATE] Step 2: Current user password hash');
+      console.log('🔐 [PASSWORD UPDATE] User password hash:', {
+        hash: user.password,
+        hashLength: user.password?.length || 0
+      });
+
+      if (!currentPassword || !newPassword) {
+        console.error('❌ [PASSWORD UPDATE] Missing password data');
+        return res.status(400).send('Missing password data');
+      }
+
+      console.log('🔐 [PASSWORD UPDATE] Step 3: Verifying current password with bcrypt.compare');
+      const isValid = await bcrypt.compare(currentPassword, user.password);
+      console.log('🔐 [PASSWORD UPDATE] bcrypt.compare result:', isValid);
+
+      if (!isValid) {
+        console.error('❌ [PASSWORD UPDATE] Current password verification FAILED');
+        return res.status(401).send('Current password is incorrect');
+      }
+
+      console.log('✅ [PASSWORD UPDATE] Current password verified successfully');
+      console.log('🔐 [PASSWORD UPDATE] Step 4: Setting new password');
+      console.log('🔐 [PASSWORD UPDATE] Password BEFORE update:', user.password);
+      
+      user.password = newPassword;
+      user.markModified('password');
+      
+      console.log('🔐 [PASSWORD UPDATE] Password AFTER setting (before save):', user.password);
+      console.log('🔐 [PASSWORD UPDATE] isModified("password"):', user.isModified('password'));
+      
+      console.log('🔐 [PASSWORD UPDATE] Step 5: Saving user to database');
+      await user.save();
+      console.log('✅ [PASSWORD UPDATE] User saved to database');
+
+      console.log('🔐 [PASSWORD UPDATE] Step 6: Verifying password was saved correctly');
+      const savedUser = await UserModel.findOne({ _id: user._id });
+      console.log('🔐 [PASSWORD UPDATE] Saved user password hash:', {
+        hash: savedUser?.password,
+        hashLength: savedUser?.password?.length || 0,
+        isHashed: savedUser?.password?.startsWith('$2') || false
+      });
+
+      console.log('🔐 [PASSWORD UPDATE] Step 7: Testing if new password works');
+      const testNewPassword = await bcrypt.compare(newPassword, savedUser!.password);
+      console.log('🔐 [PASSWORD UPDATE] New password test result:', testNewPassword);
+
+      console.log('🔐 [PASSWORD UPDATE] Step 8: Testing if old password still works');
+      const testOldPassword = await bcrypt.compare(currentPassword, savedUser!.password);
+      console.log('🔐 [PASSWORD UPDATE] Old password test result:', testOldPassword);
+
+      if (!testNewPassword) {
+        console.error('❌ [PASSWORD UPDATE] CRITICAL: New password does NOT work after save!');
+        console.error('❌ [PASSWORD UPDATE] This indicates the pre-save hook did not hash the password');
+      }
+
+      if (testOldPassword) {
+        console.error('❌ [PASSWORD UPDATE] CRITICAL: Old password STILL works after save!');
+        console.error('❌ [PASSWORD UPDATE] This indicates the password was NOT actually updated in the database');
+      }
+
+      console.log('✅ [PASSWORD UPDATE] Returning updated user object');
+      return res.status(200).send(savedUser);
     }
     else if (req.query.type === 'avatar') {
       //From base64 data to store buffer data in mongodb --> avatar: {data, contentType}
