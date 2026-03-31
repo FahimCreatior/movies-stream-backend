@@ -1,5 +1,6 @@
 import { signJWT, verifyJWT } from "../utils/jwt.utils.js";
 import { findUser } from "./user.service.js";
+import _ from 'lodash';
 
 const reIssueAccessToken = async ({refreshToken}: {refreshToken: string}) => {
   const {decoded} = verifyJWT(refreshToken)
@@ -8,7 +9,7 @@ const reIssueAccessToken = async ({refreshToken}: {refreshToken: string}) => {
   const user = await findUser({_id: (decoded as any)._id})
   if (!user) return false;
 
-  const accessToken = signJWT({...user}, {expiresIn: '15m'});
+  const accessToken = signJWT({...user, avatar: _}, {expiresIn: '1h'});
   return accessToken;
 }
 
