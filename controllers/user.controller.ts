@@ -15,10 +15,11 @@ import {
 } from '../services/user.service.js';
 import { Request, Response } from 'express';
 import { UserDocument, UserModel } from '../models/user.model.js';
-import { signJWT } from '../utils/jwt.utils.js';
+import { signJWT, verifyJWT } from '../utils/jwt.utils.js';
 import _ from 'lodash';
 import { Types } from 'mongoose';
 import bcrypt from 'bcrypt';
+import { reIssueAccessToken } from '../services/jwt.service.js';
 
 const signUpHandler = async (req: Request<{}, {}, UserType['body']>, res: Response) => {
   try {
@@ -41,8 +42,8 @@ const signUpHandler = async (req: Request<{}, {}, UserType['body']>, res: Respon
     console.log('SignUp: User created, generating tokens');
 
     // base64 encoded image data is too big to be put in jwt header --> separate query for profile avatar
-    const accessToken = signJWT({ ...newUser, avatar: _ }, { expiresIn: '15m' }); // 15mins
-    const refreshToken = signJWT({ ...newUser, avatar: _ }, { expiresIn: '1y' }); //1 year
+    const accessToken = signJWT({ ...newUser, avatar: _ }, { expiresIn: '1h' }); // 1 hour
+    const refreshToken = signJWT({ ...newUser, avatar: _ }, { expiresIn: '7d' }); // 7 days
 
     console.log('SignUp: Tokens generated successfully', {
       accessTokenLength: accessToken?.length,
@@ -76,8 +77,8 @@ const signInHandler = async (req: Request<{}, {}, UserSignInType['body']>, res: 
     console.log('✅ SignIn: User found, generating tokens');
 
     // base64 encoded image data is too big to be put in jwt header --> separate query for profile avatar
-    const accessToken = signJWT({ ...user, avatar: _ }, { expiresIn: '15m' }); // 15mins
-    const refreshToken = signJWT({ ...user, avatar: _ }, { expiresIn: '1y' }); //1 year
+    const accessToken = signJWT({ ...user, avatar: _ }, { expiresIn: '1h' }); // 1 hour
+    const refreshToken = signJWT({ ...user, avatar: _ }, { expiresIn: '7d' }); // 7 days
 
     console.log('✅ SignIn: Tokens generated successfully', {
       accessTokenLength: accessToken?.length,
@@ -264,6 +265,49 @@ const userQueryHandler = async (req: Request, res: Response) => {
     }
 };
 
+const refreshTokensHandler = async (req: Request, res: Response) => {
+  try {
+    console.log('🔄 Refresh endpoint called');
+    
+    const { refreshToken } = req.body;
+    if (!refreshToken) {
+      console.log('❌ No refresh token provided');
+      return res.status(400).json({ error: 'Refresh token is required' });
+    }
+
+    console.log('🔄 Refreshing tokens with provided refresh token');
+
+    // Use the existing reIssueAccessToken function
+    const newAccessToken = await reIssueAccessToken({ refreshToken });
+    
+    if (!newAccessToken) {
+      console.log('❌ Failed to refresh access token - invalid refresh token');
+      return res.status(401).json({ error: 'Invalid or expired refresh token' });
+    }
+
+    // Also generate a new refresh token for better security
+    const { decoded } = verifyJWT(refreshToken);
+    const user = await findUser({ _id: (decoded as any)._id });
+    
+    if (!user) {
+      console.log('❌ User not found for refresh token');
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    const newRefreshToken = signJWT({ ...user, avatar: _ }, { expiresIn: '7d' });
+
+    console.log('✅ Tokens refreshed successfully');
+
+    return res.status(200).json({
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken
+    });
+  } catch (e: any) {
+    console.error('❌ Refresh token error:', e.message);
+    return res.status(400).json({ error: 'Token refresh failed' });
+  }
+};
+
 export {
   signUpHandler,
   signInHandler,
@@ -271,4 +315,5 @@ export {
   userDeactivateHandler,
   userQueryHandler,
   userUpdateHandler,
+  refreshTokensHandler,
 };
